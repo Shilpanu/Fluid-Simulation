@@ -1,0 +1,730 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <meta name="theme-color" content="#000000">
+    <title>GOD MODE Fluid Engine | Fire + Smoke Simulation</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            user-select: none;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body {
+            background: #000;
+            overflow: hidden;
+            font-family: 'Segoe UI', 'Poppins', 'Arial', sans-serif;
+            touch-action: none;
+        }
+
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+            cursor: crosshair;
+        }
+
+        /* UI Panel */
+        .ui-panel {
+            position: fixed;
+            bottom: 20px;
+            left: 20px;
+            right: 20px;
+            background: rgba(0, 0, 0, 0.85);
+            backdrop-filter: blur(20px);
+            border-radius: 24px;
+            padding: 16px 20px;
+            z-index: 1000;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+            transition: transform 0.3s ease;
+        }
+
+        @media (min-width: 768px) {
+            .ui-panel {
+                left: auto;
+                right: 20px;
+                bottom: 20px;
+                width: 320px;
+            }
+        }
+
+        .control-group {
+            margin-bottom: 12px;
+        }
+
+        .control-label {
+            display: flex;
+            justify-content: space-between;
+            color: white;
+            font-size: 12px;
+            font-weight: 500;
+            letter-spacing: 0.5px;
+            margin-bottom: 6px;
+            text-transform: uppercase;
+            opacity: 0.8;
+        }
+
+        input[type="range"] {
+            width: 100%;
+            height: 4px;
+            -webkit-appearance: none;
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 2px;
+            outline: none;
+        }
+
+        input[type="range"]:focus {
+            outline: none;
+        }
+
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            background: #ff3366;
+            cursor: pointer;
+            box-shadow: 0 0 8px rgba(255, 51, 102, 0.6);
+        }
+
+        .mode-buttons {
+            display: flex;
+            gap: 10px;
+            margin-top: 12px;
+        }
+
+        .mode-btn {
+            flex: 1;
+            padding: 10px;
+            border: none;
+            border-radius: 12px;
+            background: rgba(255, 255, 255, 0.1);
+            color: white;
+            font-weight: 600;
+            font-size: 14px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .mode-btn.active {
+            background: linear-gradient(135deg, #ff3366, #ff6b3d);
+            box-shadow: 0 4px 12px rgba(255, 51, 102, 0.4);
+        }
+
+        .mode-btn:active {
+            transform: scale(0.98);
+        }
+
+        .clear-btn {
+            background: rgba(255, 51, 102, 0.3);
+            border: 1px solid rgba(255, 51, 102, 0.5);
+        }
+
+        .stats {
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            background: rgba(0, 0, 0, 0.7);
+            backdrop-filter: blur(10px);
+            padding: 8px 16px;
+            border-radius: 20px;
+            color: #0f0;
+            font-family: monospace;
+            font-size: 12px;
+            z-index: 1000;
+            pointer-events: none;
+            font-weight: bold;
+        }
+
+        h1 {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            color: white;
+            font-size: 12px;
+            opacity: 0.6;
+            z-index: 1000;
+            pointer-events: none;
+            letter-spacing: 2px;
+        }
+
+        @media (max-width: 768px) {
+            .stats {
+                font-size: 10px;
+                top: 10px;
+                left: 10px;
+            }
+            h1 {
+                font-size: 10px;
+                top: 10px;
+                right: 10px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="stats">
+        🔥 FPS: <span id="fps">0</span> | 💧 Particles: <span id="particleCount">0</span>
+    </div>
+    <h1>⚡ GOD MODE FLUID ENGINE</h1>
+    
+    <div class="ui-panel">
+        <div class="control-group">
+            <div class="control-label">
+                <span>🔥 Force Strength</span>
+                <span id="strengthVal">0.8</span>
+            </div>
+            <input type="range" id="strength" min="0" max="1.5" step="0.01" value="0.8">
+        </div>
+        <div class="control-group">
+            <div class="control-label">
+                <span>💨 Diffusion</span>
+                <span id="diffusionVal">0.95</span>
+            </div>
+            <input type="range" id="diffusion" min="0.9" max="0.99" step="0.001" value="0.95">
+        </div>
+        <div class="mode-buttons">
+            <button class="mode-btn active" data-mode="fire">🔥 FIRE</button>
+            <button class="mode-btn" data-mode="smoke">💨 SMOKE</button>
+            <button class="mode-btn" data-mode="rainbow">🌈 RAINBOW</button>
+            <button class="mode-btn clear-btn" id="clearBtn">🧹 CLEAR</button>
+        </div>
+    </div>
+
+    <canvas id="fluidCanvas"></canvas>
+
+    <script>
+        (function() {
+            // Canvas setup
+            const canvas = document.getElementById('fluidCanvas');
+            let ctx = canvas.getContext('2d');
+            
+            // Fluid simulation parameters
+            let width, height;
+            let cols, rows;
+            let cellSize;
+            
+            // Fluid arrays
+            let density, velocityX, velocityY, prevDensity, prevVelX, prevVelY;
+            
+            // Mouse/touch interaction
+            let mouseX = 0, mouseY = 0;
+            let mouseDown = false;
+            let lastMouseX = 0, lastMouseY = 0;
+            
+            // UI elements
+            let strength = 0.8;
+            let diffusion = 0.95;
+            let currentMode = 'fire';
+            
+            // Performance monitoring
+            let frameCount = 0;
+            let lastTime = performance.now();
+            let fps = 60;
+            
+            // Color palettes
+            const firePalette = [
+                [0, 0, 0],       // black
+                [255, 0, 0],     // red
+                [255, 69, 0],    // orange-red
+                [255, 140, 0],   // dark orange
+                [255, 200, 0],   // gold
+                [255, 255, 0]    // yellow
+            ];
+            
+            const smokePalette = [
+                [0, 0, 0],
+                [40, 40, 40],
+                [80, 80, 80],
+                [120, 120, 120],
+                [160, 160, 160],
+                [200, 200, 200]
+            ];
+            
+            // Initialize simulation
+            function initSimulation(w, h) {
+                width = w;
+                height = h;
+                
+                // Dynamic cell size for performance
+                cellSize = Math.max(4, Math.min(8, Math.floor(Math.min(width, height) / 80)));
+                cols = Math.floor(width / cellSize) + 1;
+                rows = Math.floor(height / cellSize) + 1;
+                
+                // Allocate arrays
+                const size = cols * rows;
+                density = new Float32Array(size);
+                velocityX = new Float32Array(size);
+                velocityY = new Float32Array(size);
+                prevDensity = new Float32Array(size);
+                prevVelX = new Float32Array(size);
+                prevVelY = new Float32Array(size);
+                
+                // Initialize with zeros
+                for (let i = 0; i < size; i++) {
+                    density[i] = 0;
+                    velocityX[i] = 0;
+                    velocityY[i] = 0;
+                }
+            }
+            
+            // Index mapping
+            function idx(x, y) {
+                return Math.min(cols - 1, Math.max(0, x)) + Math.min(rows - 1, Math.max(0, y)) * cols;
+            }
+            
+            // Advection step using semi-Lagrangian method
+            function advect(f, prevF, dt, velX, velY) {
+                const newF = new Float32Array(f.length);
+                for (let i = 0; i < cols; i++) {
+                    for (let j = 0; j < rows; j++) {
+                        let x = i - dt * velX[idx(i, j)];
+                        let y = j - dt * velY[idx(i, j)];
+                        
+                        if (x < 0) x = 0;
+                        if (x > cols - 1) x = cols - 1;
+                        if (y < 0) y = 0;
+                        if (y > rows - 1) y = rows - 1;
+                        
+                        const x0 = Math.floor(x);
+                        const x1 = x0 + 1;
+                        const y0 = Math.floor(y);
+                        const y1 = y0 + 1;
+                        
+                        const sx = x - x0;
+                        const sy = y - y0;
+                        const nx0 = Math.min(cols - 1, x0);
+                        const nx1 = Math.min(cols - 1, x1);
+                        const ny0 = Math.min(rows - 1, y0);
+                        const ny1 = Math.min(rows - 1, y1);
+                        
+                        const v00 = prevF[idx(nx0, ny0)];
+                        const v10 = prevF[idx(nx1, ny0)];
+                        const v01 = prevF[idx(nx0, ny1)];
+                        const v11 = prevF[idx(nx1, ny1)];
+                        
+                        const val = (1 - sx) * (1 - sy) * v00 +
+                                   sx * (1 - sy) * v10 +
+                                   (1 - sx) * sy * v01 +
+                                   sx * sy * v11;
+                        
+                        newF[idx(i, j)] = val;
+                    }
+                }
+                return newF;
+            }
+            
+            // Diffuse step
+            function diffuse(f, prevF, diff, dt) {
+                const a = dt * diff * cols * rows;
+                for (let iter = 0; iter < 20; iter++) {
+                    for (let i = 0; i < cols; i++) {
+                        for (let j = 0; j < rows; j++) {
+                            const idxC = idx(i, j);
+                            let sum = prevF[idxC];
+                            if (i > 0) sum += a * f[idx(i - 1, j)];
+                            if (i < cols - 1) sum += a * f[idx(i + 1, j)];
+                            if (j > 0) sum += a * f[idx(i, j - 1)];
+                            if (j < rows - 1) sum += a * f[idx(i, j + 1)];
+                            f[idxC] = sum / (1 + 4 * a);
+                        }
+                    }
+                }
+                return f;
+            }
+            
+            // Projection step (pressure solve for incompressibility)
+            function project(velX, velY) {
+                const pressure = new Float32Array(cols * rows);
+                const div = new Float32Array(cols * rows);
+                
+                for (let i = 0; i < cols; i++) {
+                    for (let j = 0; j < rows; j++) {
+                        const idxC = idx(i, j);
+                        let vxRight = i < cols - 1 ? velX[idx(i + 1, j)] : 0;
+                        let vxLeft = i > 0 ? velX[idx(i - 1, j)] : 0;
+                        let vyTop = j < rows - 1 ? velY[idx(i, j + 1)] : 0;
+                        let vyBottom = j > 0 ? velY[idx(i, j - 1)] : 0;
+                        
+                        div[idxC] = (vxRight - vxLeft + vyTop - vyBottom) * -0.5;
+                    }
+                }
+                
+                // Gauss-Seidel pressure solve
+                for (let iter = 0; iter < 40; iter++) {
+                    for (let i = 0; i < cols; i++) {
+                        for (let j = 0; j < rows; j++) {
+                            const idxC = idx(i, j);
+                            let sum = 0;
+                            if (i > 0) sum += pressure[idx(i - 1, j)];
+                            if (i < cols - 1) sum += pressure[idx(i + 1, j)];
+                            if (j > 0) sum += pressure[idx(i, j - 1)];
+                            if (j < rows - 1) sum += pressure[idx(i, j + 1)];
+                            pressure[idxC] = (div[idxC] + sum) * 0.25;
+                        }
+                    }
+                }
+                
+                // Update velocities
+                for (let i = 0; i < cols; i++) {
+                    for (let j = 0; j < rows; j++) {
+                        const idxC = idx(i, j);
+                        if (i > 0) velX[idxC] -= 0.5 * (pressure[idx(i + 1, j)] - pressure[idx(i - 1, j)]);
+                        if (j > 0) velY[idxC] -= 0.5 * (pressure[idx(i, j + 1)] - pressure[idx(i, j - 1)]);
+                    }
+                }
+            }
+            
+            // Add force at mouse/touch position
+            function addForce(x, y, forceX, forceY, amount) {
+                const gridX = Math.floor(x / cellSize);
+                const gridY = Math.floor(y / cellSize);
+                const radius = 12;
+                
+                for (let i = -radius; i <= radius; i++) {
+                    for (let j = -radius; j <= radius; j++) {
+                        const nx = gridX + i;
+                        const ny = gridY + j;
+                        if (nx >= 0 && nx < cols && ny >= 0 && ny < rows) {
+                            const dist = Math.sqrt(i * i + j * j);
+                            if (dist < radius) {
+                                const influence = (1 - dist / radius) * amount;
+                                const idxC = idx(nx, ny);
+                                velocityX[idxC] += forceX * influence;
+                                velocityY[idxC] += forceY * influence;
+                                
+                                // Add density based on mode
+                                if (currentMode === 'fire') {
+                                    density[idxC] += influence * 1.5;
+                                } else if (currentMode === 'smoke') {
+                                    density[idxC] += influence * 1.2;
+                                } else if (currentMode === 'rainbow') {
+                                    density[idxC] += influence * 1.3;
+                                }
+                                
+                                // Clamp density
+                                if (density[idxC] > 1) density[idxC] = 1;
+                            }
+                        }
+                    }
+                }
+            }
+            
+            // Update fluid simulation
+            function updateFluid(dt) {
+                dt = Math.min(dt, 0.033); // Cap dt for stability
+                
+                // Advect velocity
+                let newVelX = advect(velocityX, velocityX, dt, velocityX, velocityY);
+                let newVelY = advect(velocityY, velocityY, dt, velocityX, velocityY);
+                
+                // Diffuse velocity
+                newVelX = diffuse(newVelX, velocityX, 0.0001, dt);
+                newVelY = diffuse(newVelY, velocityY, 0.0001, dt);
+                
+                // Project
+                project(newVelX, newVelY);
+                
+                velocityX = newVelX;
+                velocityY = newVelY;
+                
+                // Advect density
+                let newDensity = advect(density, density, dt, velocityX, velocityY);
+                
+                // Diffuse density
+                newDensity = diffuse(newDensity, density, 0.001, dt);
+                
+                // Apply diffusion factor
+                for (let i = 0; i < newDensity.length; i++) {
+                    newDensity[i] *= diffusion;
+                    if (newDensity[i] < 0.001) newDensity[i] = 0;
+                }
+                
+                density = newDensity;
+                
+                // Add ambient forces (buoyancy/smoke rise)
+                for (let i = 0; i < cols; i++) {
+                    for (let j = 0; j < rows; j++) {
+                        const idxC = idx(i, j);
+                        // Buoyancy - hot fluid rises
+                        velocityY[idxC] += density[idxC] * 0.05;
+                        // Vorticity confinement - creates swirling effects
+                        if (i > 0 && i < cols - 1 && j > 0 && j < rows - 1) {
+                            const dwdy = (velocityX[idx(i, j + 1)] - velocityX[idx(i, j - 1)]) * 0.5;
+                            const dvdx = (velocityY[idx(i + 1, j)] - velocityY[idx(i - 1, j)]) * 0.5;
+                            const vort = dwdy - dvdx;
+                            const length = Math.sqrt(vort * vort);
+                            if (length > 0.01) {
+                                const nx = Math.abs(vort) / length;
+                                const ny = Math.abs(vort) / length;
+                                velocityX[idxC] += nx * 0.1;
+                                velocityY[idxC] += ny * 0.1;
+                            }
+                        }
+                        // Damping
+                        velocityX[idxC] *= 0.995;
+                        velocityY[idxC] *= 0.995;
+                    }
+                }
+            }
+            
+            // Color mapping based on density and mode
+            function getColor(density, mode) {
+                if (mode === 'fire') {
+                    if (density < 0.001) return [0, 0, 0, 0];
+                    const t = Math.min(1, density * 1.5);
+                    if (t < 0.2) {
+                        const r = Math.floor(255 * (t / 0.2));
+                        return [r, 0, 0, 255];
+                    } else if (t < 0.4) {
+                        const r = 255;
+                        const g = Math.floor(255 * ((t - 0.2) / 0.2));
+                        return [r, g, 0, 255];
+                    } else if (t < 0.6) {
+                        const r = 255;
+                        const g = 255;
+                        const b = Math.floor(255 * ((t - 0.4) / 0.2));
+                        return [r, g, b, 255];
+                    } else {
+                        const r = 255;
+                        const g = 255;
+                        const b = Math.floor(255 * (1 - (t - 0.6) / 0.4));
+                        return [r, g, b, 255];
+                    }
+                } else if (mode === 'smoke') {
+                    if (density < 0.001) return [0, 0, 0, 0];
+                    const val = Math.floor(40 + density * 200);
+                    return [val, val, val, Math.floor(255 * density)];
+                } else if (mode === 'rainbow') {
+                    if (density < 0.001) return [0, 0, 0, 0];
+                    const hue = (Date.now() * 0.002 + density * 10) % 1;
+                    const rgb = hslToRgb(hue, 1, 0.5);
+                    return [rgb[0], rgb[1], rgb[2], Math.floor(255 * density)];
+                }
+                return [0, 0, 0, 0];
+            }
+            
+            function hslToRgb(h, s, l) {
+                let r, g, b;
+                if (s === 0) {
+                    r = g = b = l;
+                } else {
+                    const hue2rgb = (p, q, t) => {
+                        if (t < 0) t += 1;
+                        if (t > 1) t -= 1;
+                        if (t < 1/6) return p + (q - p) * 6 * t;
+                        if (t < 1/2) return q;
+                        if (t < 2/3) return p + (q - p) * (2/3 - t) * 6;
+                        return p;
+                    };
+                    const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
+                    const p = 2 * l - q;
+                    r = hue2rgb(p, q, h + 1/3);
+                    g = hue2rgb(p, q, h);
+                    b = hue2rgb(p, q, h - 1/3);
+                }
+                return [Math.floor(r * 255), Math.floor(g * 255), Math.floor(b * 255)];
+            }
+            
+            // Render fluid to canvas
+            function render() {
+                if (!ctx) return;
+                
+                const imageData = ctx.createImageData(width, height);
+                const data = imageData.data;
+                
+                for (let i = 0; i < cols; i++) {
+                    for (let j = 0; j < rows; j++) {
+                        const d = density[idx(i, j)];
+                        const color = getColor(d, currentMode);
+                        if (color[3] === 0) continue;
+                        
+                        const x = i * cellSize;
+                        const y = j * cellSize;
+                        const w = Math.min(cellSize, width - x);
+                        const h = Math.min(cellSize, height - y);
+                        
+                        for (let py = 0; py < h; py++) {
+                            for (let px = 0; px < w; px++) {
+                                const pixelX = x + px;
+                                const pixelY = y + py;
+                                const idx = (pixelY * width + pixelX) * 4;
+                                
+                                // Blend with existing pixel
+                                const alpha = color[3] / 255;
+                                data[idx] = data[idx] * (1 - alpha) + color[0] * alpha;
+                                data[idx + 1] = data[idx + 1] * (1 - alpha) + color[1] * alpha;
+                                data[idx + 2] = data[idx + 2] * (1 - alpha) + color[2] * alpha;
+                                data[idx + 3] = 255;
+                            }
+                        }
+                    }
+                }
+                
+                ctx.putImageData(imageData, 0, 0);
+            }
+            
+            // Handle mouse/touch input
+            function handleStart(e) {
+                e.preventDefault();
+                mouseDown = true;
+                const pos = getCanvasCoords(e);
+                mouseX = pos.x;
+                mouseY = pos.y;
+                lastMouseX = mouseX;
+                lastMouseY = mouseY;
+            }
+            
+            function handleMove(e) {
+                if (!mouseDown) return;
+                e.preventDefault();
+                const pos = getCanvasCoords(e);
+                const currentX = pos.x;
+                const currentY = pos.y;
+                
+                const dx = currentX - lastMouseX;
+                const dy = currentY - lastMouseY;
+                const forceMag = Math.min(strength * 20, 30);
+                
+                addForce(currentX, currentY, dx * forceMag, dy * forceMag, strength);
+                
+                mouseX = currentX;
+                mouseY = currentY;
+                lastMouseX = mouseX;
+                lastMouseY = mouseY;
+            }
+            
+            function handleEnd(e) {
+                e.preventDefault();
+                mouseDown = false;
+            }
+            
+            function getCanvasCoords(e) {
+                const rect = canvas.getBoundingClientRect();
+                const scaleX = canvas.width / rect.width;
+                const scaleY = canvas.height / rect.height;
+                
+                let clientX, clientY;
+                if (e.touches) {
+                    clientX = e.touches[0].clientX;
+                    clientY = e.touches[0].clientY;
+                } else {
+                    clientX = e.clientX;
+                    clientY = e.clientY;
+                }
+                
+                let x = (clientX - rect.left) * scaleX;
+                let y = (clientY - rect.top) * scaleY;
+                x = Math.max(0, Math.min(width, x));
+                y = Math.max(0, Math.min(height, y));
+                return { x, y };
+            }
+            
+            // Clear simulation
+            function clearSimulation() {
+                for (let i = 0; i < density.length; i++) {
+                    density[i] = 0;
+                    velocityX[i] = 0;
+                    velocityY[i] = 0;
+                }
+            }
+            
+            // Animation loop
+            let lastTimestamp = 0;
+            function animate(timestamp) {
+                const dt = Math.min(0.033, (timestamp - lastTimestamp) / 1000);
+                if (dt > 0.01 && lastTimestamp > 0) {
+                    updateFluid(dt);
+                }
+                lastTimestamp = timestamp;
+                
+                render();
+                
+                // Update FPS counter
+                frameCount++;
+                const now = performance.now();
+                if (now - lastTime >= 1000) {
+                    fps = frameCount;
+                    document.getElementById('fps').textContent = fps;
+                    document.getElementById('particleCount').textContent = density.filter(v => v > 0.01).length;
+                    frameCount = 0;
+                    lastTime = now;
+                }
+                
+                requestAnimationFrame(animate);
+            }
+            
+            // Resize handler
+            function resizeCanvas() {
+                width = window.innerWidth;
+                height = window.innerHeight;
+                canvas.width = width;
+                canvas.height = height;
+                canvas.style.width = width + 'px';
+                canvas.style.height = height + 'px';
+                ctx = canvas.getContext('2d');
+                initSimulation(width, height);
+            }
+            
+            // UI event listeners
+            function setupUI() {
+                const strengthSlider = document.getElementById('strength');
+                const strengthVal = document.getElementById('strengthVal');
+                const diffusionSlider = document.getElementById('diffusion');
+                const diffusionVal = document.getElementById('diffusionVal');
+                const clearBtn = document.getElementById('clearBtn');
+                const modeBtns = document.querySelectorAll('.mode-btn');
+                
+                strengthSlider.addEventListener('input', (e) => {
+                    strength = parseFloat(e.target.value);
+                    strengthVal.textContent = strength.toFixed(2);
+                });
+                
+                diffusionSlider.addEventListener('input', (e) => {
+                    diffusion = parseFloat(e.target.value);
+                    diffusionVal.textContent = diffusion.toFixed(3);
+                });
+                
+                clearBtn.addEventListener('click', () => {
+                    clearSimulation();
+                });
+                
+                modeBtns.forEach(btn => {
+                    btn.addEventListener('click', () => {
+                        modeBtns.forEach(b => b.classList.remove('active'));
+                        btn.classList.add('active');
+                        currentMode = btn.dataset.mode;
+                    });
+                });
+            }
+            
+            // Initialize everything
+            function init() {
+                resizeCanvas();
+                setupUI();
+                
+                // Event listeners
+                canvas.addEventListener('mousedown', handleStart);
+                canvas.addEventListener('mousemove', handleMove);
+                canvas.addEventListener('mouseup', handleEnd);
+                canvas.addEventListener('touchstart', handleStart);
+                canvas.addEventListener('touchmove', handleMove);
+                canvas.addEventListener('touchend', handleEnd);
+                window.addEventListener('resize', resizeCanvas);
+                
+                // Start animation
+                requestAnimationFrame(animate);
+            }
+            
+            init();
+        })();
+    </script>
+</body>
+</html>
